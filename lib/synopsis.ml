@@ -9,7 +9,7 @@ let read_file src =
   let parsetree = Parse.implementation (Lexing.from_channel inchan) in
   List.fold_left (Utils.get_synopsis) {modules = []; definitions = []} parsetree
 
-let module_check (synops:Utils._synopsis list) allowed = 
+let module_check (synops:Utils._synopsis list) ~allowed = 
   let open OUnit2 in
   let open List in
   iter (fun (s:Utils._synopsis) -> 
@@ -19,7 +19,7 @@ let module_check (synops:Utils._synopsis list) allowed =
         |> iter (fun deconstructed -> 
                   match deconstructed with
                   |[] -> ()
-                  |prefix::_ -> assert_equal (mem prefix allowed) true))
+                  |prefix::_ -> assert_equal (mem prefix allowed) true ~msg:("disallowed module: " ^ prefix)))
   synops
 
 let ref_check (synops:Utils._synopsis list) = 

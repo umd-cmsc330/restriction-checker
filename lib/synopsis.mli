@@ -8,5 +8,5 @@ val read_file: string -> Utils._synopsis
     @param src filepath to read from
     @return synopsis of file read *)
 
-val module_check: Utils._synopsis list -> string list -> unit
+val module_check: Utils._synopsis list -> allowed:string list -> unit
 val ref_check: Utils._synopsis list -> unit
