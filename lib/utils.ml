@@ -111,7 +111,9 @@ let rec get_bindings_calls ({pexp_desc=desc; _}:Parsetree.expression) =
        |None -> ([], [])
        |Some(e_branch) -> get_bindings_calls e_branch)
     in (bindings @ bindings' @ bindings'', union [calls; calls'; calls''])
-  |Pexp_sequence(_, _) -> raise (Failure "Illegal use of ; (sequence) construct")
+  |Pexp_sequence(e1, e2) -> let bindings, calls = get_bindings_calls e1 in
+                            let bindings', calls' = get_bindings_calls e2 in
+                            (bindings @ bindings', union [calls; calls'])
   |Pexp_while(_, _) -> raise (Failure "Illegal use of while loop construct")
   |Pexp_for(_, _, _, _, _) -> raise (Failure "Illegal use of for loop construct")
   (* actually something we can do here is add a dummy call (i.e Module_name.dummy)
