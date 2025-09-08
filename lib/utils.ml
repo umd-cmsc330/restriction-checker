@@ -16,7 +16,7 @@ type _synopsis = {
    }
 
 (* set union of multiple lists of strings *)
-(* what's the overhead of this vs keeping everything a list? *)
+(* lowkey, just like combine lists and then uniq sort normally maybe *)
 let union lsts = 
   let open StringSet in
   List.concat lsts |> of_list |> to_list
@@ -43,27 +43,24 @@ let modules_from_calls calls =
     |_ -> []
   in map (String.split_on_char '.') calls |> concat_map parse_dot
 
+(* can combine a lot of these patterns into or-patterns *)
 let rec get_names_from_pattern ({ppat_desc=desc; _}:Parsetree.pattern) = 
   match desc with
-  |Ppat_any -> []
   |Ppat_var({Asttypes.txt=x;_}) -> [x]
   |Ppat_alias(pat,{Asttypes.txt=x;_}) -> union [get_names_from_pattern pat; [x]]
-  |Ppat_constant(_) -> []
-  |Ppat_interval(_) -> []
   |Ppat_tuple(p_lst) -> List.fold_left (fun a x -> union [a; get_names_from_pattern x]) [] p_lst
   |Ppat_construct(_, o) -> 
     (match o with
-     |None -> []
-     |Some(_ ,p) -> get_names_from_pattern p)
-  |Ppat_variant(_,None) -> []
+    |None -> []
+    |Some(_ ,p) -> get_names_from_pattern p)
   |Ppat_variant(_,Some(x)) -> get_names_from_pattern x
   |Ppat_record(lst,_) -> 
     List.fold_left (fun a ({Asttypes.txt=x;_},p) -> 
-                      union [a; get_names_from_lident x; get_names_from_pattern p]) [] lst
+      union [a; get_names_from_lident x; get_names_from_pattern p]) [] lst
   |Ppat_array(lst) -> List.fold_left (fun a x -> union [a; get_names_from_pattern x]) [] lst
   |Ppat_or(a,b) -> union [get_names_from_pattern a; get_names_from_pattern b]
   |Ppat_constraint(p, _) | Ppat_exception(p) -> get_names_from_pattern p
-  (* my gripe with this is that we will have to take in the modules list *)
+  |Ppat_any | Ppat_constant(_) | Ppat_interval(_) | Ppat_variant(_, None) -> []
   |Ppat_open(_, p) -> get_names_from_pattern p
   |_ -> raise (Failure "using something like ppat_type, lazy, unpack or extension")
 
@@ -74,7 +71,10 @@ let rec get_bindings_calls ({pexp_desc=desc; _}:Parsetree.expression) =
                       let bindings, calls = get_bindings_calls x in
                       (a @ bindings, union [b; calls])) ([], []) cs
   in match desc with
-  |Pexp_ident(_) -> ([], [])    (* we don't care about random identifiers *)
+  |Pexp_ident({Asttypes.txt=i; _}) -> 
+    (match i with 
+     | Longident.Ldot(_, _) -> ([], get_names_from_lident i) (* something like just Funs.id *)
+     | _ -> ([], []))   (* we don't care about other random identifiers *)
   |Pexp_let(rf,vb_lst,e) -> 
     let bindings, calls = deconstruct_binding_list rf vb_lst in
     let bindings', calls' = get_bindings_calls e in
