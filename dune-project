@@ -16,7 +16,7 @@
   (depends 
     (ocaml (>= 5.2.0)) 
     dune
-    (ounit2 (>= 2.2.7)))
+    (alcotest (>= 1.9.1)))
   (allow_empty))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/latest/reference/dune-project/index.html
