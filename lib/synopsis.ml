@@ -1,31 +1,42 @@
 (** top-level synopsis fuctions, used for enforcing restrictions *)
+open ListLabels
 
-let read_string str = 
-  let tree = Parse.implementation (Lexing.from_string str) in
-  List.fold_left (Utils.get_synopsis) {modules = []; definitions = []} tree
+module A = Alcotest
 
-let read_file src = 
-  let inchan = open_in src in
-  let parsetree = Parse.implementation (Lexing.from_channel inchan) in
-  List.fold_left (Utils.get_synopsis) {modules = []; definitions = []} parsetree
+(* i feel like adding a function composition combinator would be nice here *)
+(* reverse composition *)
+let (%%) f g x = g (f x)
 
+(* empty synopsis *)
+let (empty:Utils._synopsis) = {modules=[]; definitions=[]}
+
+(* gen synopsis from string *)
+let read_string = 
+  Lexing.from_string        (* lex string *)
+  %% Parse.implementation   (* generate AST *)
+  %% fold_left ~f:Utils.get_synopsis ~init:empty
+
+(* gen synopsis from file *)
+let read_file =
+  open_in
+  %% Lexing.from_channel
+  %% Parse.implementation
+  %% fold_left ~f:Utils.get_synopsis ~init:empty
+
+(* ok, but now this has brought back the float function quirk *)
+(* perhaps at some point we can include the top-level binding in which it was found? *)
 let module_check (synops:Utils._synopsis list) ~allowed = 
-  let open OUnit2 in
-  let open List in
-  iter (fun (s:Utils._synopsis) -> 
-        (* break strings into modules and submodules *)
-        map (String.split_on_char '.') s.modules 
-        (* check if top module is allowed *)
-        |> iter (fun deconstructed -> 
-                  match deconstructed with
-                  |[] -> ()
-                  |prefix::_ -> assert_equal (mem prefix allowed) true ~msg:("disallowed module: " ^ prefix)))
-  synops
+  let output = fold_left ~f:(fun a n -> a ^ " " ^ n) ~init:"illegal modules:" in
+  let check (s:Utils._synopsis) =
+     let illegal = 
+      concat_map ~f:(String.split_on_char '.') s.modules
+      |> filter ~f:(Fun.flip List.mem allowed %% not)
+    in A.(string |> list |> check) (output illegal) [] illegal
+  in iter ~f:check synops
 
 let ref_check (synops:Utils._synopsis list) = 
-  let open OUnit2 in
-  let open List in
-  iter (fun (s:Synopsis__Utils._synopsis) -> 
-              (* check if any list of calls in a def has ref in it *)
-              iter (fun d -> snd d |> mem "ref" |> assert_equal false) s.definitions)
-  synops
+  let check (s:Utils._synopsis) =
+    concat_map ~f:snd s.definitions 
+    |> List.mem "ref" 
+    |> A.(check bool) "" false
+  in iter ~f:check synops

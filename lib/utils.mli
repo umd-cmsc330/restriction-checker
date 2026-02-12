@@ -44,8 +44,8 @@ val deconstruct_binding_list: Asttypes.rec_flag -> Parsetree.value_binding list 
 
 val get_synopsis: _synopsis -> Parsetree.structure_item -> _synopsis
 (** generates updates a synopsis with information via the structure item argument
-    @param the item to deconstruct into a synopsis
     @param acc the [_synopsis] to accumulate information into
+    @param item the item to deconstruct into a synopsis
     @return new updated synopsis record
   *)
 
