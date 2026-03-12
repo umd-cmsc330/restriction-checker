@@ -1,12 +1,29 @@
-val read_string: string -> Utils._synopsis
+(** top-level synopsis fuctions, used for enforcing restrictions
+    @author Nathan Ho ({:{https://github.com/ptrichr} ptrichr})
+  *)
+
 (** generate a synopsis of the expressions contained in a string
-    @param str ocaml expression represented as a string 
-    @return synopsis of ocaml expression *)
+    @param _ expression represented as a string 
+    @return synopsis of ocaml expression 
+  *)
+val read_string: string -> Utils.synopsis
 
-val read_file: string -> Utils._synopsis
 (** generate a synopsis of the top-level bindings in a file
-    @param src filepath to read from
-    @return synopsis of file read *)
+    @param _ filepath to read from
+    @return synopsis of file read
+  *)
+val read_file: string -> Utils.synopsis
 
-val module_check: Utils._synopsis list -> allowed:string list -> unit
-val ref_check: Utils._synopsis list -> unit
+(** determine if the modules that are used by this source code
+    contains modules that are not permitted for use.
+    @param allowed list of modules that are permitted for use
+    @param synops list of synopsis to analyze
+    @return fails if an illegal module usage is detected
+  *)
+val module_check: allowed:string list -> Utils.synopsis list -> unit
+
+(** determine if there is any usage of refs in this source code
+    @param synops list of synopsis to analyze
+    @return fails if ref usage is detected
+  *)
+val ref_check: Utils.synopsis list -> unit

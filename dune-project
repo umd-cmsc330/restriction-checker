@@ -14,9 +14,10 @@
   (source
     (github umd-cmsc330/restriction-checker))
   (depends 
-    (ocaml (>= 5.2.0)) 
+    (ocaml (>= 5.3.0)) 
     dune
-    (alcotest (>= 1.9.1)))
+    (alcotest (>= 1.9.1))
+    (ppx_deriving (>= 6.0.3)))
   (allow_empty))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/latest/reference/dune-project/index.html

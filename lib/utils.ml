@@ -1,23 +1,30 @@
-(** utilities for synopsis *)
+(** utilities for synopsis
+    @author Nathan Ho ({:{https://github.com/ptrichr} ptrichr})
+  *)
 
 module StringSet = Set.Make(String)
 
-type _identifier = string
-type _call = string
-type _binding = bool * _identifier list
-type _definition = _binding list * _call list
-type _synopsis = {
-    modules: _identifier list ;
-    (* maybe add a list of imperative constructs used *)
-    definitions: _definition list ;
-   }
+type identifier = string
+[@@deriving show { with_path = false }]
 
-(* set union of multiple lists of strings *)
+type call = string
+[@@deriving show { with_path = false }]
+
+type binding = bool * identifier list
+[@@deriving show { with_path = false }]
+
+type definition = binding list * call list
+[@@deriving show { with_path = false }]
+
+type synopsis = {
+  modules: identifier list ;
+  definitions: definition list ;
+} [@@deriving show { with_path = false }]
+
 let union lsts = 
   let open StringSet in
   List.concat lsts |> of_list |> to_list
 
-(* make a list unique by converting it to a set and back *)
 let uniq lst = 
   let open StringSet in
   of_list lst |> to_list
@@ -30,7 +37,6 @@ let rec get_names_from_lident (id:Longident.t) =
   |Ldot(_, _) -> [String.concat "." (Longident.flatten id)]
   |Lapply(a,b) -> (get_names_from_lident a) @ (get_names_from_lident b)
 
-(* use for ppat open too *)
 let parse_loc ({Asttypes.txt=id; _}:Longident.t Asttypes.loc) = get_names_from_lident id
 
 (* gather modules used from function calls of the syntax: (M.)*f *)
@@ -44,7 +50,11 @@ let modules_from_calls calls =
     |_ -> []
   in map (String.split_on_char '.') calls |> concat_map parse_dot
 
-(* these aren't guaranteed to be unique anymore. callee must make unique *)
+(** parses a [Parsetree.pattern], gathering all identifiers that are bound in
+    the pattern. The list of identifiers is not guaranteed to be duplicate-free.
+    @param p pattern that is binding identifiers
+    @return list of identifiers bound by pattern
+  *)
 let rec get_names_from_pattern ({ppat_desc=desc; _}:Parsetree.pattern) = 
   match desc with
   |Ppat_var({Asttypes.txt=x;_}) -> [x]
@@ -59,7 +69,15 @@ let rec get_names_from_pattern ({ppat_desc=desc; _}:Parsetree.pattern) =
   |Ppat_variant(_, None) | Ppat_construct(_, None) -> []
   |_ -> raise (Failure "using something like ppat_type, lazy, unpack or extension")
 
-(* call list is not guarateed to be unique. callee must make unique *)
+
+(** Parses a [Parsetree.expression] into a [definition], containing
+    the bindings and function applications that occur in the expression.
+    The call list is not guaranteed to be composed of unique elements,
+    it is on the callee to make sure the list contains no duplicates.
+    @param exp expression being parsed
+    @return [definition] representing bindings and function calls
+            happening inside the expression 
+  *)
 let rec get_bindings_calls ({pexp_desc=desc; _}:Parsetree.expression) =
   let from_lst lst =
     ListLabels.map ~f:get_bindings_calls lst
@@ -92,6 +110,7 @@ let rec get_bindings_calls ({pexp_desc=desc; _}:Parsetree.expression) =
     let bindings', calls' = parse_cases cs in
     (bindings @ bindings', calls @ calls')
   |Pexp_tuple(es) -> from_lst es
+  |Pexp_construct(_, Some(exp)) -> get_bindings_calls exp     (* i suppose we don't really care abt the constructor *)
   |Pexp_record(cs, _) -> ListLabels.map ~f:snd cs |> from_lst
   |Pexp_setfield(_, _, _) -> raise (Failure "Illegal use of mutable field")
   |Pexp_array(_) -> raise (Failure "Illegal use of array construct")
@@ -108,19 +127,21 @@ let rec get_bindings_calls ({pexp_desc=desc; _}:Parsetree.expression) =
                             (bindings @ bindings', calls @ calls')
   |Pexp_while(_, _) -> raise (Failure "Illegal use of while loop construct")
   |Pexp_for(_, _, _, _, _) -> raise (Failure "Illegal use of for loop construct")
-  (* actually something we can do here is add a dummy call (i.e Module_name.dummy)
-     that works because we will get modules from calls and then we can just
-     filter the dummy function calls out later in get_synopsis or something*)
   |Pexp_open(_, _) -> ([], [])
   |_ -> ([],[])
 
+(** Turns a [Parsetree.valuebinding] list into a [definition] outlining the 
+    items bound by the expression being parsed.
+    @param rf whether or not the binding is recursive
+    @param vb_lst the list of value bindings to convert
+    @return [definition] representing the value bindings
+*)
 and deconstruct_binding_list rf vb_lst = 
   let deconstruct_binding {Parsetree.pvb_pat=bindee; Parsetree.pvb_expr=expr; _} =
     let sub_bindings, calls = get_bindings_calls expr in
     (* this callsite needs to make patterns unique (?) *)
     ((rf = Asttypes.Recursive, get_names_from_pattern bindee)::sub_bindings, calls)
-  in 
-  ListLabels.map ~f:deconstruct_binding vb_lst
+  in ListLabels.map ~f:deconstruct_binding vb_lst
   |> ListLabels.split
   |> fun (a, b) -> (ListLabels.concat a, ListLabels.concat b)
 
