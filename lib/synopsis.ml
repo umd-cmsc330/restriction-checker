@@ -1,31 +1,47 @@
-(** top-level synopsis fuctions, used for enforcing restrictions *)
+(** top-level synopsis fuctions, used for enforcing restrictions
+    @author Nathan Ho ({:{https://github.com/ptrichr} ptrichr})
+  *)
 
-let read_string str = 
-  let tree = Parse.implementation (Lexing.from_string str) in
-  List.fold_left (Utils.get_synopsis) {modules = []; definitions = []} tree
+open ListLabels
 
-let read_file src = 
-  let inchan = open_in src in
-  let parsetree = Parse.implementation (Lexing.from_channel inchan) in
-  List.fold_left (Utils.get_synopsis) {modules = []; definitions = []} parsetree
+module A = Alcotest
 
-let module_check (synops:Utils._synopsis list) allowed = 
-  let open OUnit2 in
-  let open List in
-  iter (fun (s:Utils._synopsis) -> 
-        (* break strings into modules and submodules *)
-        map (String.split_on_char '.') s.modules 
-        (* check if top module is allowed *)
-        |> iter (fun deconstructed -> 
-                  match deconstructed with
-                  |[] -> ()
-                  |prefix::_ -> assert_equal (mem prefix allowed) true))
-  synops
+(* i feel like adding a function composition combinator would be nice here *)
+(* reverse composition *)
+let ( << ) f g x = g @@ f @@ x
 
-let ref_check (synops:Utils._synopsis list) = 
-  let open OUnit2 in
-  let open List in
-  iter (fun (s:Synopsis__Utils._synopsis) -> 
-              (* check if any list of calls in a def has ref in it *)
-              iter (fun d -> snd d |> mem "ref" |> assert_equal false) s.definitions)
-  synops
+(* empty synopsis *)
+let (init: Utils.synopsis) = {modules=[]; definitions=[]}
+
+(* gen synopsis from string *)
+let read_string = 
+  Lexing.from_string        (* lex string *)
+  << Parse.implementation   (* generate AST *)
+  << fold_left ~f:Utils.get_synopsis ~init
+
+(* gen synopsis from file *)
+let read_file =
+  open_in
+  << Lexing.from_channel
+  << Parse.implementation
+  << fold_left ~f:Utils.get_synopsis ~init
+
+let module_check ~allowed (synops:Utils.synopsis list) = 
+  let set = "+"::"-"::"*"::"/"::"~-"::"~+"::allowed in    (* floating point ops look like this *)
+  let check (s:Utils.synopsis) =
+    filter_map 
+    ~f:(fun m -> match String.split_on_char '.' m with 
+                  | prefix::_ when not (mem ~set prefix) -> Some(prefix)
+                  | _ -> None) 
+    s.modules
+    |> A.(string |> list |> check) "" []
+  in iter ~f:check synops
+
+(* they could just shadow ref, it's only an issue 
+  if they use ref in conjunction with ! *)
+let ref_check (synops:Utils.synopsis list) = 
+  let check (s:Utils.synopsis) =
+    concat_map ~f:snd s.definitions 
+    |> (fun fs -> List.mem "ref" fs && List.mem "!" fs)
+    |> A.(check bool) "" false
+  in iter ~f:check synops

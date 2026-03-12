@@ -1,3 +1,5 @@
 (library
  (public_name synopsis)
-(libraries compiler-libs.common ounit2))
+ (libraries compiler-libs.common alcotest)
+ (preprocess 
+  (pps ppx_deriving.show)))
