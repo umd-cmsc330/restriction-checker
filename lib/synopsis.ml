@@ -28,15 +28,13 @@ let read_file =
 
 let module_check ~allowed (synops:Utils.synopsis list) = 
   let set = "+"::"-"::"*"::"/"::"~-"::"~+"::allowed in    (* floating point ops look like this *)
-  let output = fold_left ~f:(fun a n -> a ^ " " ^ n) ~init:"illegal modules:" in
   let check (s:Utils.synopsis) =
-     let illegal = 
-      filter_map 
-      ~f:(fun m -> match String.split_on_char '.' m with 
-                   | prefix::_ when not (mem ~set prefix) -> Some(prefix)
-                   | _ -> None) 
-      s.modules
-    in A.(string |> list |> check) (output illegal) [] illegal
+    filter_map 
+    ~f:(fun m -> match String.split_on_char '.' m with 
+                  | prefix::_ when not (mem ~set prefix) -> Some(prefix)
+                  | _ -> None) 
+    s.modules
+    |> A.(string |> list |> check) "" []
   in iter ~f:check synops
 
 (* they could just shadow ref, it's only an issue 
